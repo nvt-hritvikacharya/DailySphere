@@ -10,10 +10,58 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
+import type { AuthMode } from "@/lib/env";
 
 type Mode = "email" | "phone";
 
-export function LoginForm() {
+export function LoginForm({ mode: authMode }: { mode: AuthMode }) {
+  if (authMode === "cursor") return <CursorSignIn />;
+  if (authMode === "disabled") return <SignInUnavailable />;
+  return <OtpForm />;
+}
+
+function SignInUnavailable() {
+  return (
+    <div className="w-full max-w-sm space-y-3">
+      <h2 className="font-heading text-3xl font-semibold tracking-tight">Sign-in isn&apos;t configured</h2>
+      <p className="text-muted-foreground">The site owner needs to add Supabase credentials (SUPABASE_URL and SUPABASE_ANON_KEY) to enable email and phone sign-in.</p>
+    </div>
+  );
+}
+
+function CursorSignIn() {
+  const params = useSearchParams();
+  const [loading, setLoading] = useState(false);
+  async function go() {
+    setLoading(true);
+    try {
+      const r = await api<{ onboarded: boolean }>("/api/auth/cursor", { method: "POST" });
+      window.location.assign(r.onboarded ? "/" : "/onboarding");
+    } catch (err) {
+      toast.error((err as Error).message);
+      setLoading(false);
+    }
+  }
+  return (
+    <div className="w-full max-w-sm space-y-8">
+      <div className="space-y-2">
+        <p className="font-heading text-xl font-semibold lg:hidden">DailySphere</p>
+        <h2 className="font-heading text-3xl font-semibold tracking-tight">Welcome</h2>
+        <p className="text-muted-foreground">You&apos;re signed in to Cursor. Continue to open your daily briefing.</p>
+        {params.get("expired") && (
+          <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+            Your session expired after an hour of inactivity. Please continue again.
+          </p>
+        )}
+      </div>
+      <Button className="h-11 w-full" onClick={go} disabled={loading}>
+        {loading && <Loader2 className="animate-spin" />} Continue with Cursor
+      </Button>
+    </div>
+  );
+}
+
+function OtpForm() {
   const params = useSearchParams();
   const [mode, setMode] = useState<Mode>("email");
   const [identifier, setIdentifier] = useState("");

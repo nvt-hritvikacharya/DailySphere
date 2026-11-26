@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { supabaseEnabled } from "@/lib/env";
+import { authMode } from "@/lib/env";
 import { log } from "@/lib/logger";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { getSupabase } from "@/lib/supabase/server";
@@ -17,10 +17,12 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
 
-  if (!supabaseEnabled) {
-    log("info", "Demo OTP issued", { to: "email" in parsed.data ? parsed.data.email : parsed.data.phone });
+  const mode = authMode();
+  if (mode === "demo") {
+    log("info", "Demo OTP issued");
     return NextResponse.json({ ok: true, demo: true });
   }
+  if (mode !== "supabase") return NextResponse.json({ error: "Code sign-in is not enabled" }, { status: 404 });
 
   const supabase = (await getSupabase())!;
   const { error } = await supabase.auth.signInWithOtp(

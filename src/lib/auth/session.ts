@@ -41,13 +41,22 @@ export async function requireAdmin(): Promise<SessionUser | NextResponse> {
 }
 
 /** Find or create the app user for a verified identity and issue the app session cookie. */
-export async function establishSession(identity: { email?: string; phone?: string; supabaseId?: string }) {
+export async function establishSession(identity: {
+  email?: string;
+  phone?: string;
+  supabaseId?: string;
+  cursorSub?: string;
+  name?: string;
+  grantAdmin?: boolean;
+}) {
   const store = await cookies();
   const tz = safeTimeZone(store.get(TZ_COOKIE)?.value);
   const handle = (identity.email ?? identity.phone ?? "").toLowerCase();
-  const isAdmin = env.adminEmails.includes(handle);
+  const isAdmin = Boolean(identity.grantAdmin) || (handle !== "" && env.adminEmails.includes(handle));
 
-  const where = identity.supabaseId
+  const where = identity.cursorSub
+    ? { cursorSub: identity.cursorSub }
+    : identity.supabaseId
     ? { supabaseId: identity.supabaseId }
     : identity.email
       ? { email: identity.email.toLowerCase() }
@@ -63,6 +72,7 @@ export async function establishSession(identity: { email?: string; phone?: strin
         where: { id: existing.id },
         data: {
           supabaseId: identity.supabaseId ?? existing.supabaseId,
+          cursorSub: identity.cursorSub ?? existing.cursorSub,
           timezone: tz,
           lastActiveAt: new Date(),
           ...(isAdmin ? { role: "ADMIN" as const } : {}),
@@ -73,7 +83,8 @@ export async function establishSession(identity: { email?: string; phone?: strin
           email: identity.email?.toLowerCase(),
           phone: identity.phone,
           supabaseId: identity.supabaseId,
-          name: identity.email ? identity.email.split("@")[0] : `Reader ${identity.phone?.slice(-4)}`,
+          cursorSub: identity.cursorSub,
+          name: identity.name || (identity.email ? identity.email.split("@")[0] : `Reader ${identity.phone?.slice(-4) ?? ""}`),
           role: isAdmin ? "ADMIN" : "USER",
           timezone: tz,
           preference: { create: { interests: [] } },

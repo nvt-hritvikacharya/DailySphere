@@ -11,8 +11,9 @@ const CODES: Record<number, string> = {
 };
 
 export async function getWeather(lat?: number, lon?: number, city?: string): Promise<Weather> {
-  const la = Number.isFinite(lat) ? (lat as number) : env.defaultLat;
-  const lo = Number.isFinite(lon) ? (lon as number) : env.defaultLon;
+  // ~10 km precision: enough for weather, and the exact location never leaves the server.
+  const la = Math.round((Number.isFinite(lat) ? (lat as number) : env.defaultLat) * 10) / 10;
+  const lo = Math.round((Number.isFinite(lon) ? (lon as number) : env.defaultLon) * 10) / 10;
   const name = city || (lat === undefined ? env.defaultCity : "Your location");
   // Round coordinates so nearby users share a cache entry.
   const key = `weather:${la.toFixed(1)}:${lo.toFixed(1)}`;

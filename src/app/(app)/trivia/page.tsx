@@ -15,7 +15,7 @@ import type { TriviaQuestion } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Q = TriviaQuestion & { answer?: string };
-type Row = { rank: number; name: string; score: number; total: number; userId: string };
+type Row = { rank: number; name: string; score: number; total: number; you: boolean };
 type TriviaData = { date: string; questions: Q[]; result: { score: number; total: number; answers: string[] } | null; leaderboard: Row[] };
 
 export default function TriviaPage() {
@@ -131,9 +131,9 @@ export default function TriviaPage() {
           {data.leaderboard.length ? (
             <ol className="mt-4 space-y-2">
               {data.leaderboard.map((r) => (
-                <li key={r.userId} className="flex items-center gap-3 rounded-xl px-3 py-2 odd:bg-muted/50">
+                <li key={r.rank} className={cn("flex items-center gap-3 rounded-xl px-3 py-2 odd:bg-muted/50", r.you && "ring-1 ring-primary/40")}>
                   <span className={cn("w-6 text-center font-semibold tabular-nums", r.rank <= 3 && "text-amber-500")}>{r.rank}</span>
-                  <span className="flex-1 truncate">{r.name}</span>
+                  <span className="flex-1 truncate">{r.name}{r.you && <span className="text-muted-foreground"> (you)</span>}</span>
                   <span className="font-semibold tabular-nums">{r.score}/{r.total}</span>
                 </li>
               ))}

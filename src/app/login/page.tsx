@@ -1,7 +1,9 @@
 import { Suspense } from "react";
+import { authMode } from "@/lib/env";
 import { LoginForm } from "./login-form";
 
 export const metadata = { title: "Sign in" };
+export const dynamic = "force-dynamic";
 
 export default function LoginPage() {
   return (
@@ -22,7 +24,7 @@ export default function LoginPage() {
       </section>
       <section className="flex items-center justify-center p-6">
         <Suspense>
-          <LoginForm />
+          <LoginForm mode={authMode()} />
         </Suspense>
       </section>
     </main>

@@ -13,7 +13,7 @@ export async function api<T>(path: string, init?: RequestInit & { json?: unknown
     headers: { "Content-Type": "application/json", ...init?.headers },
     body: init?.json !== undefined ? JSON.stringify(init.json) : init?.body,
   });
-  if (res.status === 401 && typeof window !== "undefined") {
+  if (res.status === 401 && typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
     window.location.href = "/login?expired=1";
   }
   const data = await res.json().catch(() => ({}));

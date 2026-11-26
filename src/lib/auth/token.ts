@@ -24,7 +24,13 @@ async function hmac(secret: string, data: string) {
 }
 
 function getSecret() {
-  return process.env.SESSION_SECRET || "dev-insecure-secret";
+  const explicit = process.env.SESSION_SECRET?.trim();
+  if (explicit) return explicit;
+  // The database URL is a platform-provided secret that never ships in the code.
+  const db = process.env.DATABASE_URL?.trim();
+  if (db) return `ds-session:${db}`;
+  if (process.env.NODE_ENV === "production") throw new Error("SESSION_SECRET is not set");
+  return "dev-insecure-secret";
 }
 
 export async function signSession(payload: SessionPayload): Promise<string> {

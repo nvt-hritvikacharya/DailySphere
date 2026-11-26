@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { rateLimit } from "@/lib/rate-limit";
+import { httpUrl } from "@/lib/validation";
 
 export async function GET() {
   const user = await requireUser();
@@ -15,14 +17,21 @@ const schema = z.object({
   type: z.enum(["ARTICLE", "FACT", "TRIVIA", "WORD", "QUOTE", "HISTORY"]),
   refId: z.string().min(1).max(200),
   title: z.string().min(1).max(500),
-  url: z.string().url().optional(),
-  data: z.record(z.string(), z.unknown()).optional(),
+  url: httpUrl.optional(),
+  data: z
+    .record(z.string(), z.unknown())
+    .refine((d) => JSON.stringify(d).length <= 4000, "Bookmark data too large")
+    .optional(),
 });
 
 /** Toggles a bookmark; returns the new state. */
 export async function POST(req: Request) {
   const user = await requireUser();
   if (user instanceof NextResponse) return user;
+  if (!rateLimit(`write:${user.id}`, 120, 60_000)) return NextResponse.json({ error: "Slow down" }, { status: 429 });
+  if ((await db.bookmark.count({ where: { userId: user.id } })) >= 2000) {
+    return NextResponse.json({ error: "Bookmark limit reached" }, { status: 400 });
+  }
   const parsed = schema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: "Invalid bookmark" }, { status: 400 });
   const { type, refId, title, url, data } = parsed.data;

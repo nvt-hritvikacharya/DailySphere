@@ -8,7 +8,7 @@ A personalized daily news and knowledge platform. Users pick their interests, th
 
 | Area | What it does |
 | --- | --- |
-| Auth | Email or phone OTP via Supabase. The app then issues a signed, httpOnly session that **expires after 1 hour of inactivity** (sliding window enforced in middleware). Without Supabase keys it runs in demo mode with code `123456`. |
+| Auth | Email or phone OTP via Supabase. The app then issues a signed, httpOnly session that **expires after 1 hour of inactivity** (sliding window enforced in middleware). Without Supabase: on Cursor app hosting (private/team), viewers continue with their Cursor account; in development, demo mode with code `123456`. |
 | Onboarding | Multi-select from 22 interests. The picks are stored on `Preference.interests`. |
 | Home | Greeting, local date, weather (browser geolocation, then `DEFAULT_LAT/LON`), hero story plus grid, today's knowledge cards, trivia CTA |
 | News cards | Headline, image, source, relative time, a 70–100 word summary, and **Read more** linking to the publisher (full articles are never reproduced). Each card has like, bookmark and share. |
@@ -34,6 +34,10 @@ npm run dev                     # http://localhost:3000
 
 To sign in, use any email or an international phone number (for example `+919876543210`). In demo mode the code is **`123456`**. Signing in as `admin@dailysphere.dev` (listed in `ADMIN_EMAILS`) unlocks `/admin`.
 
+## Publishing on Cursor
+
+`cursor-app.json` asks the platform for a Postgres database, which sets `DATABASE_URL`. `npm run build` runs `prisma migrate deploy` after `next build` when that variable is present. Publish as **private** or **team** so the Cursor gate signs viewers in. On a private app the first person to sign in becomes admin; on a team app, team admins are admins. `ADMIN_EMAILS` also applies.
+
 ## Docker (app + Postgres + hourly refresh job)
 
 ```bash
@@ -51,7 +55,8 @@ The `app` container runs `prisma migrate deploy` on start. The `cron` service ca
 | `SESSION_SECRET` | yes (prod) | HMAC key for app session cookies |
 | `ADMIN_EMAILS` | no | Comma-separated emails/phones granted `ADMIN` on sign-in |
 | `CRON_SECRET` | yes for cron | Bearer token for `/api/cron/refresh` |
-| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | no | Turns on real email/SMS OTP. Without them, demo mode is used. |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | no | Turns on real email/SMS OTP (server-side only). |
+| `ALLOW_DEMO_LOGIN` | no | `true` enables demo OTP (code `123456`) in production builds. **Never on a public deployment**: it accepts any email. Demo mode is always on in `npm run dev`. |
 | `GNEWS_API_KEY` / `NEWSAPI_KEY` | no | Live headlines (GNews takes priority). Without them, curated mock headlines are used. |
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | no | AI summaries of 70–100 words. Without them, extractive summaries are built from the publisher snippet. |
 | `WORDNIK_API_KEY` | no | Wordnik Word of the Day. Otherwise a curated word is used, enriched by the Free Dictionary API. |

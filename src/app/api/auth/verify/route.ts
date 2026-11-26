@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { establishSession } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { supabaseEnabled } from "@/lib/env";
+import { authMode } from "@/lib/env";
 import { log } from "@/lib/logger";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { getSupabase } from "@/lib/supabase/server";
@@ -25,8 +25,10 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   const { email, phone, token } = parsed.data;
 
+  const mode = authMode();
+  if (mode !== "supabase" && mode !== "demo") return NextResponse.json({ error: "Code sign-in is not enabled" }, { status: 404 });
   let supabaseId: string | undefined;
-  if (supabaseEnabled) {
+  if (mode === "supabase") {
     const supabase = (await getSupabase())!;
     const { data, error } = email
       ? await supabase.auth.verifyOtp({ email, token, type: "email" })

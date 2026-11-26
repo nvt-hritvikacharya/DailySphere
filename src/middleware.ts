@@ -5,6 +5,15 @@ const PUBLIC_PATHS = ["/login", "/api/auth", "/api/cron", "/api/health"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // CSRF: reject cross-site writes. Browsers always send Origin on cross-origin POST/PUT/DELETE.
+  if (pathname.startsWith("/api/") && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    const origin = req.headers.get("origin");
+    const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+    if (origin && host && new URL(origin).host !== host) {
+      return NextResponse.json({ error: "Cross-site request blocked" }, { status: 403 });
+    }
+  }
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
   const raw = req.cookies.get(SESSION_COOKIE)?.value;
   const session = await verifySession(raw);

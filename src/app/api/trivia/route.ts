@@ -4,14 +4,20 @@ import { getTodayKey, requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { getTriviaWithAnswers } from "@/lib/providers/daily";
 
-async function leaderboard(date: string) {
+async function leaderboard(date: string, viewerId: string) {
   const rows = await db.triviaScore.findMany({
     where: { date },
     orderBy: [{ score: "desc" }, { createdAt: "asc" }],
     take: 10,
     include: { user: { select: { name: true } } },
   });
-  return rows.map((r, i) => ({ rank: i + 1, name: r.user.name ?? "Reader", score: r.score, total: r.total, userId: r.userId }));
+  return rows.map((r, i) => ({
+    rank: i + 1,
+    name: (r.user.name ?? "Reader").split(/[\s@._]/)[0] || "Reader",
+    score: r.score,
+    total: r.total,
+    you: r.userId === viewerId,
+  }));
 }
 
 export async function GET() {
@@ -25,7 +31,7 @@ export async function GET() {
     // Answers are only revealed after the user has submitted for the day.
     questions: questions.map(({ answer, ...q }) => (existing ? { ...q, answer } : q)),
     result: existing ? { score: existing.score, total: existing.total, answers: existing.answers } : null,
-    leaderboard: await leaderboard(date),
+    leaderboard: await leaderboard(date, user.id),
   });
 }
 
@@ -49,6 +55,6 @@ export async function POST(req: Request) {
     score,
     total: questions.length,
     correct: questions.map((q) => q.answer),
-    leaderboard: await leaderboard(date),
+    leaderboard: await leaderboard(date, user.id),
   });
 }
