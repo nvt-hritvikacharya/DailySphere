@@ -1,0 +1,158 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum BookmarkType {
+  ARTICLE
+  FACT
+  TRIVIA
+  WORD
+  QUOTE
+  HISTORY
+}
+
+model User {
+  id           String         @id @default(cuid())
+  supabaseId   String?        @unique
+  email        String?        @unique
+  phone        String?        @unique
+  name         String?
+  role         Role           @default(USER)
+  timezone     String         @default("UTC")
+  createdAt    DateTime       @default(now())
+  lastActiveAt DateTime       @default(now())
+  preference   Preference?
+  bookmarks    Bookmark[]
+  likes        Like[]
+  history      History[]
+  triviaScores TriviaScore[]
+  notifications Notification[]
+}
+
+model Preference {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interests      String[]
+  onboarded      Boolean  @default(false)
+  darkMode       Boolean  @default(false)
+  notifyDaily    Boolean  @default(true)
+  notifyTrivia   Boolean  @default(true)
+  notifyBreaking Boolean  @default(false)
+  updatedAt      DateTime @updatedAt
+}
+
+model Bookmark {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      BookmarkType
+  refId     String
+  title     String
+  url       String?
+  data      Json?
+  createdAt DateTime     @default(now())
+
+  @@unique([userId, type, refId])
+  @@index([userId, createdAt])
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  articleId String
+  title     String
+  category  String?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, articleId])
+  @@index([articleId])
+}
+
+model History {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  articleId String
+  title     String
+  url       String
+  source    String?
+  category  String?
+  readAt    DateTime @default(now())
+
+  @@index([userId, readAt])
+  @@index([category])
+}
+
+model TriviaScore {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      String
+  score     Int
+  total     Int
+  answers   Json
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([date, score])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
+
+/// Provider responses cached per user-local date so each day is fetched once.
+model CachedContent {
+  key       String   @id
+  kind      String
+  date      String
+  data      Json
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([kind, date])
+  @@index([expiresAt])
+}
+
+model ApiLog {
+  id         String   @id @default(cuid())
+  provider   String
+  ok         Boolean
+  status     Int?
+  latencyMs  Int
+  fallback   Boolean  @default(false)
+  error      String?
+  createdAt  DateTime @default(now())
+
+  @@index([provider, createdAt])
+}
+
+model AppLog {
+  id        String   @id @default(cuid())
+  level     String
+  message   String
+  context   Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
