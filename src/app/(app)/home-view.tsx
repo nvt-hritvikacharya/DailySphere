@@ -2,38 +2,51 @@
 
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FactCard, QuoteCard, SectionHeader, WeatherWidget, WordCard } from "@/components/daily/widgets";
 import { ArticleCard, ArticleSkeleton } from "@/components/news/article-card";
 import { Button } from "@/components/ui/button";
 import { useDaily, useFeed, useWeather } from "@/hooks/use-content";
 import { greeting } from "@/lib/format";
 
+type Coords = { lat: number; lon: number };
+const COORDS_KEY = "ds_coords";
+
 function useCoords() {
-  const [state, setState] = useState<{ coords: { lat: number; lon: number } | null; ready: boolean }>({ coords: null, ready: false });
-  useEffect(() => {
-    if (!navigator.geolocation) return setState({ coords: null, ready: true });
-    const timer = setTimeout(() => setState((s) => (s.ready ? s : { coords: null, ready: true })), 3000);
+  const [state, setState] = useState<{ coords: Coords | null; ready: boolean; denied: boolean }>({ coords: null, ready: false, denied: false });
+
+  const locate = useCallback(() => {
+    if (!navigator.geolocation) return setState((s) => ({ ...s, ready: true, denied: true }));
     navigator.geolocation.getCurrentPosition(
       (p) => {
-        clearTimeout(timer);
-        setState({ coords: { lat: p.coords.latitude, lon: p.coords.longitude }, ready: true });
+        const coords = { lat: Math.round(p.coords.latitude * 100) / 100, lon: Math.round(p.coords.longitude * 100) / 100 };
+        localStorage.setItem(COORDS_KEY, JSON.stringify(coords));
+        setState({ coords, ready: true, denied: false });
       },
-      () => {
-        clearTimeout(timer);
-        setState({ coords: null, ready: true });
-      },
-      { maximumAge: 30 * 60_000, timeout: 3000 },
+      () => setState((s) => ({ ...s, ready: true, denied: !s.coords })),
+      { maximumAge: 30 * 60_000, timeout: 15_000 },
     );
-    return () => clearTimeout(timer);
   }, []);
-  return state;
+
+  useEffect(() => {
+    let saved: Coords | null = null;
+    try {
+      saved = JSON.parse(localStorage.getItem(COORDS_KEY) ?? "null");
+    } catch {}
+    if (saved) setState({ coords: saved, ready: true, denied: false });
+    // Show the default city while the browser's permission prompt is open; swap in the real location once it arrives.
+    const timer = setTimeout(() => setState((s) => (s.ready ? s : { ...s, ready: true })), 4000);
+    locate();
+    return () => clearTimeout(timer);
+  }, [locate]);
+
+  return { ...state, locate };
 }
 
 export function HomeView({ name }: { name: string }) {
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => setNow(new Date()), []);
-  const { coords, ready } = useCoords();
+  const { coords, ready, denied, locate } = useCoords();
   const weather = useWeather(coords, ready);
   const feed = useFeed("home");
   const daily = useDaily();
@@ -51,7 +64,7 @@ export function HomeView({ name }: { name: string }) {
           </h1>
           <p className="mt-2 text-muted-foreground">Here&apos;s your briefing for today.</p>
         </div>
-        <WeatherWidget weather={weather.data} loading={!ready || weather.isLoading} />
+        <WeatherWidget weather={weather.data} loading={!ready || weather.isLoading} located={!!coords} denied={denied} onLocate={locate} />
       </section>
 
       <section>

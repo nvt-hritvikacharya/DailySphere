@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Bookmark, Cloud, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Lightbulb, Moon, Quote as QuoteIcon, Sun, Volume2 } from "lucide-react";
+import { Bookmark, Cloud, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Lightbulb, MapPin, Moon, Quote as QuoteIcon, Sun, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToggleBookmark } from "@/hooks/use-content";
 import type { Fact, HistoryEvent, Quote, Weather, WordOfDay } from "@/lib/types";
@@ -47,7 +47,19 @@ function weatherIcon(code: number, isDay: boolean) {
   return CloudLightning;
 }
 
-export function WeatherWidget({ weather, loading }: { weather?: Weather; loading?: boolean }) {
+export function WeatherWidget({
+  weather,
+  loading,
+  located,
+  denied,
+  onLocate,
+}: {
+  weather?: Weather;
+  loading?: boolean;
+  located?: boolean;
+  denied?: boolean;
+  onLocate?: () => void;
+}) {
   if (loading || !weather) return <div className="glass h-[104px] w-full animate-pulse rounded-3xl sm:w-72" />;
   const Icon = weatherIcon(weather.code, weather.isDay);
   return (
@@ -61,6 +73,15 @@ export function WeatherWidget({ weather, loading }: { weather?: Weather; loading
         <p className="text-xs text-muted-foreground tabular-nums">
           H {weather.high}° · L {weather.low}° · feels {weather.apparent}°
         </p>
+        {onLocate && (!located || denied) && (
+          <button
+            type="button"
+            onClick={onLocate}
+            className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          >
+            <MapPin className="size-3" /> Use my location
+          </button>
+        )}
       </div>
     </motion.div>
   );

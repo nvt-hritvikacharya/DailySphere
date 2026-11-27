@@ -10,6 +10,19 @@ const CODES: Record<number, string> = {
   95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Thunderstorm with hail",
 };
 
+async function reverseGeocode(lat: number, lon: number): Promise<string | null> {
+  if (env.useMocks) return null;
+  try {
+    const d = await fetchJson<{ city?: string; locality?: string; principalSubdivision?: string }>(
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`,
+      { timeoutMs: 4000 },
+    );
+    return d.city || d.locality || d.principalSubdivision || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getWeather(lat?: number, lon?: number, city?: string): Promise<Weather> {
   // ~10 km precision: enough for weather, and the exact location never leaves the server.
   const la = Math.round((Number.isFinite(lat) ? (lat as number) : env.defaultLat) * 10) / 10;
@@ -27,11 +40,14 @@ export async function getWeather(lat?: number, lon?: number, city?: string): Pro
               current: { temperature_2m: number; apparent_temperature: number; weather_code: number; is_day: number };
               daily: { temperature_2m_max: number[]; temperature_2m_min: number[] };
             };
-            const d = await fetchJson<R>(
+            const [d, place] = await Promise.all([
+              fetchJson<R>(
               `https://api.open-meteo.com/v1/forecast?latitude=${la}&longitude=${lo}&current=temperature_2m,apparent_temperature,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto`,
-            );
+              ),
+              city || lat === undefined ? Promise.resolve(null) : reverseGeocode(la, lo),
+            ]);
             return {
-              city: name,
+              city: place || name,
               temperature: Math.round(d.current.temperature_2m),
               apparent: Math.round(d.current.apparent_temperature),
               code: d.current.weather_code,
