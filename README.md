@@ -24,8 +24,8 @@ A personalized daily news and knowledge platform. Users pick their interests, th
 ## Quick start (local)
 
 ```bash
-cp .env.example .env            # set SESSION_SECRET (openssl rand -hex 32)
-docker compose up -d db         # or use any Postgres and update DATABASE_URL
+cp .env.example .env            # set POSTGRES_PASSWORD, SESSION_SECRET, CRON_SECRET (openssl rand -hex 32)
+docker compose up -d db         # Postgres on 127.0.0.1:5432; or use any Postgres and update DATABASE_URL
 npm install
 npx prisma migrate dev          # creates the schema
 npm run db:seed                 # optional: admin + 5 demo readers + leaderboard
@@ -41,7 +41,7 @@ To sign in, use any email or an international phone number (for example `+919876
 ## Docker (app + Postgres + hourly refresh job)
 
 ```bash
-cp .env.example .env   # fill in secrets
+cp .env.example .env   # fill in POSTGRES_PASSWORD, SESSION_SECRET and CRON_SECRET (openssl rand -hex 32)
 docker compose up --build
 ```
 
@@ -52,9 +52,10 @@ The `app` container runs `prisma migrate deploy` on start. The `cron` service ca
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `DATABASE_URL` | yes | PostgreSQL connection string |
-| `SESSION_SECRET` | yes (prod) | HMAC key for app session cookies |
+| `POSTGRES_PASSWORD` | yes for Docker | Password for the docker-compose Postgres (only published on 127.0.0.1) |
+| `SESSION_SECRET` | recommended | HMAC key for app session cookies. When unset, a random key is generated once and stored in the database. |
 | `ADMIN_EMAILS` | no | Comma-separated emails/phones granted `ADMIN` on sign-in |
-| `CRON_SECRET` | yes for cron | Bearer token for `/api/cron/refresh` |
+| `CRON_SECRET` | yes for cron | Bearer token for `/api/cron/refresh`; the endpoint returns 401 while it is unset |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | no | Turns on real email/SMS OTP (server-side only). |
 | `ALLOW_DEMO_LOGIN` | no | `true` enables demo OTP (code `123456`) in production builds. **Never on a public deployment**: it accepts any email. Demo mode is always on in `npm run dev`. |
 | `GNEWS_API_KEY` / `NEWSAPI_KEY` | no | Live headlines (GNews takes priority). Without them, curated mock headlines are used. |
