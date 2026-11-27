@@ -44,5 +44,7 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
+  // Session verification may read the signing key from the database, which needs Node (not edge).
+  runtime: "nodejs",
   matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|svg|webp|ico)$).*)"],
 };

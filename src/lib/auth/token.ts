@@ -1,4 +1,5 @@
-// Edge-compatible (Web Crypto) so it can run in middleware as well as route handlers.
+// Node-only (the secret may come from the database); middleware runs on the nodejs runtime for this.
+import { getSessionSecret } from "./secret";
 
 export const SESSION_COOKIE = "ds_session";
 export const IDLE_TIMEOUT_MS = 60 * 60 * 1000;
@@ -23,26 +24,16 @@ async function hmac(secret: string, data: string) {
   return new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(data)));
 }
 
-function getSecret() {
-  const explicit = process.env.SESSION_SECRET?.trim();
-  if (explicit) return explicit;
-  // The database URL is a platform-provided secret that never ships in the code.
-  const db = process.env.DATABASE_URL?.trim();
-  if (db) return `ds-session:${db}`;
-  if (process.env.NODE_ENV === "production") throw new Error("SESSION_SECRET is not set");
-  return "dev-insecure-secret";
-}
-
 export async function signSession(payload: SessionPayload): Promise<string> {
   const body = b64url(enc.encode(JSON.stringify(payload)));
-  return `${body}.${b64url(await hmac(getSecret(), body))}`;
+  return `${body}.${b64url(await hmac(await getSessionSecret(), body))}`;
 }
 
 export async function verifySession(token: string | undefined): Promise<SessionPayload | null> {
   if (!token) return null;
   const [body, sig] = token.split(".");
   if (!body || !sig) return null;
-  const expected = b64url(await hmac(getSecret(), body));
+  const expected = b64url(await hmac(await getSessionSecret(), body));
   if (expected.length !== sig.length) return null;
   let diff = 0;
   for (let i = 0; i < sig.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
