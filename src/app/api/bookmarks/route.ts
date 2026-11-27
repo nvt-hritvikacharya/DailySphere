@@ -29,9 +29,6 @@ export async function POST(req: Request) {
   const user = await requireUser();
   if (user instanceof NextResponse) return user;
   if (!rateLimit(`write:${user.id}`, 120, 60_000)) return NextResponse.json({ error: "Slow down" }, { status: 429 });
-  if ((await db.bookmark.count({ where: { userId: user.id } })) >= 2000) {
-    return NextResponse.json({ error: "Bookmark limit reached" }, { status: 400 });
-  }
   const parsed = schema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: "Invalid bookmark" }, { status: 400 });
   const { type, refId, title, url, data } = parsed.data;
@@ -40,6 +37,9 @@ export async function POST(req: Request) {
   if (existing) {
     await db.bookmark.delete({ where });
     return NextResponse.json({ bookmarked: false });
+  }
+  if ((await db.bookmark.count({ where: { userId: user.id } })) >= 2000) {
+    return NextResponse.json({ error: "Bookmark limit reached" }, { status: 400 });
   }
   await db.bookmark.create({
     data: { userId: user.id, type, refId, title, url, data: data as Prisma.InputJsonValue | undefined },
@@ -50,8 +50,9 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   const user = await requireUser();
   if (user instanceof NextResponse) return user;
+  if (!rateLimit(`write:${user.id}`, 120, 60_000)) return NextResponse.json({ error: "Slow down" }, { status: 429 });
   const id = new URL(req.url).searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  if (!id || id.length > 100) return NextResponse.json({ error: "Missing id" }, { status: 400 });
   await db.bookmark.deleteMany({ where: { id, userId: user.id } });
   return NextResponse.json({ ok: true });
 }

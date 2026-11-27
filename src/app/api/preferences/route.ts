@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { INTEREST_IDS } from "@/lib/interests";
 import { safeTimeZone } from "@/lib/dates";
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function GET() {
   const user = await requireUser();
@@ -15,9 +16,9 @@ export async function GET() {
 }
 
 const schema = z.object({
-  name: z.string().min(1).max(60).optional(),
-  timezone: z.string().optional(),
-  interests: z.array(z.enum(INTEREST_IDS as [string, ...string[]])).min(1).max(22).optional(),
+  name: z.string().trim().min(1).max(60).optional(),
+  timezone: z.string().max(64).optional(),
+  interests: z.array(z.enum(INTEREST_IDS as [string, ...string[]])).min(1).max(INTEREST_IDS.length).transform((ids) => [...new Set(ids)]).optional(),
   onboarded: z.boolean().optional(),
   darkMode: z.boolean().optional(),
   notifyDaily: z.boolean().optional(),
@@ -28,6 +29,7 @@ const schema = z.object({
 export async function PUT(req: Request) {
   const user = await requireUser();
   if (user instanceof NextResponse) return user;
+  if (!rateLimit(`write:${user.id}`, 120, 60_000)) return NextResponse.json({ error: "Slow down" }, { status: 429 });
   const parsed = schema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   const { name, timezone, ...prefs } = parsed.data;
