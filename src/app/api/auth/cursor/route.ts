@@ -20,6 +20,7 @@ export async function POST(request: Request) {
   const user = await establishSession({
     cursorSub: identity.sub,
     email: identity.email || undefined,
+    emailVerified: identity.emailVerified,
     name: identity.name || undefined,
     grantAdmin: teamAdmin || firstPrivateUser,
   });

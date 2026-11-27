@@ -12,7 +12,7 @@ const DEMO_OTP = "123456";
 const schema = z
   .object({
     email: z.string().email().optional(),
-    phone: z.string().optional(),
+    phone: z.string().regex(/^\+[1-9]\d{7,14}$/, "Use international format, e.g. +919876543210").optional(),
     token: z.string().regex(/^\d{6}$/, "Enter the 6-digit code"),
   })
   .refine((v) => v.email || v.phone, "Email or phone is required");
@@ -24,6 +24,9 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   const { email, phone, token } = parsed.data;
+  if (!rateLimit(`verify:${(email ?? phone)!.toLowerCase()}`, 10, 10 * 60_000)) {
+    return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
+  }
 
   const mode = authMode();
   if (mode !== "supabase" && mode !== "demo") return NextResponse.json({ error: "Code sign-in is not enabled" }, { status: 404 });
@@ -39,7 +42,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `Invalid code (demo mode: use ${DEMO_OTP})` }, { status: 400 });
   }
 
-  const user = await establishSession({ email, phone, supabaseId });
+  // A successful Supabase verifyOtp proves control of the email/phone it was sent to; demo mode
+  // proves nothing but is only enabled for development or explicit self-hosted opt-in.
+  const user = await establishSession({
+    email: email || undefined,
+    emailVerified: Boolean(email),
+    phone: email ? undefined : phone,
+    phoneVerified: !email && Boolean(phone),
+    supabaseId,
+  });
   log("info", "User signed in", { userId: user.id });
   const pref = await db.preference.findUnique({ where: { userId: user.id } });
   return NextResponse.json({ ok: true, onboarded: Boolean(pref?.onboarded) });

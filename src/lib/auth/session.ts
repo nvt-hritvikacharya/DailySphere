@@ -40,39 +40,65 @@ export async function requireAdmin(): Promise<SessionUser | NextResponse> {
   return user;
 }
 
-/** Find or create the app user for a verified identity and issue the app session cookie. */
-export async function establishSession(identity: {
+type Identity = {
   email?: string;
+  /** True only when the identity provider proved the viewer controls this email. */
+  emailVerified?: boolean;
   phone?: string;
+  /** True only when the identity provider proved the viewer controls this phone number. */
+  phoneVerified?: boolean;
   supabaseId?: string;
   cursorSub?: string;
   name?: string;
   grantAdmin?: boolean;
-}) {
+};
+
+type UserRow = NonNullable<Awaited<ReturnType<typeof db.user.findUnique>>>;
+
+/**
+ * An existing account may be claimed by email/phone only when that row is not already bound to a
+ * different identity of the same provider; provider-less (demo) sign-ins only match unbound rows.
+ */
+function canLink(row: UserRow, identity: Identity) {
+  if (identity.cursorSub) return row.cursorSub === null;
+  if (identity.supabaseId) return row.supabaseId === null;
+  return row.cursorSub === null && row.supabaseId === null;
+}
+
+/** Find or create the app user for a verified identity and issue the app session cookie. */
+export async function establishSession(identity: Identity) {
   const store = await cookies();
   const tz = safeTimeZone(store.get(TZ_COOKIE)?.value);
-  const handle = (identity.email ?? identity.phone ?? "").toLowerCase();
-  const isAdmin = Boolean(identity.grantAdmin) || (handle !== "" && env.adminEmails.includes(handle));
+  const email = identity.emailVerified && identity.email ? identity.email.toLowerCase() : undefined;
+  const phone = identity.phoneVerified && identity.phone ? identity.phone : undefined;
+  const handle = email ?? phone ?? "";
+  const isAdmin = Boolean(identity.grantAdmin) || (handle !== "" && env.adminEmails.includes(handle.toLowerCase()));
 
-  const where = identity.cursorSub
-    ? { cursorSub: identity.cursorSub }
+  let existing: UserRow | null = identity.cursorSub
+    ? await db.user.findUnique({ where: { cursorSub: identity.cursorSub } })
     : identity.supabaseId
-    ? { supabaseId: identity.supabaseId }
-    : identity.email
-      ? { email: identity.email.toLowerCase() }
-      : { phone: identity.phone! };
+      ? await db.user.findUnique({ where: { supabaseId: identity.supabaseId } })
+      : null;
 
-  const existing =
-    (await db.user.findUnique({ where })) ??
-    (identity.email ? await db.user.findUnique({ where: { email: identity.email.toLowerCase() } }) : null) ??
-    (identity.phone ? await db.user.findUnique({ where: { phone: identity.phone } }) : null);
+  let emailTaken = false;
+  let phoneTaken = false;
+  if (!existing && email) {
+    const row = await db.user.findUnique({ where: { email } });
+    if (row && canLink(row, identity)) existing = row;
+    else emailTaken = Boolean(row);
+  }
+  if (!existing && phone) {
+    const row = await db.user.findUnique({ where: { phone } });
+    if (row && canLink(row, identity)) existing = row;
+    else phoneTaken = Boolean(row);
+  }
 
   const user = existing
     ? await db.user.update({
         where: { id: existing.id },
         data: {
-          supabaseId: identity.supabaseId ?? existing.supabaseId,
-          cursorSub: identity.cursorSub ?? existing.cursorSub,
+          supabaseId: existing.supabaseId ?? identity.supabaseId,
+          cursorSub: existing.cursorSub ?? identity.cursorSub,
           timezone: tz,
           lastActiveAt: new Date(),
           ...(isAdmin ? { role: "ADMIN" as const } : {}),
@@ -80,8 +106,9 @@ export async function establishSession(identity: {
       })
     : await db.user.create({
         data: {
-          email: identity.email?.toLowerCase(),
-          phone: identity.phone,
+          // Unverified or already-claimed contacts are not stored, so they can't block or hijack the real owner.
+          email: emailTaken ? undefined : email,
+          phone: phoneTaken ? undefined : phone,
           supabaseId: identity.supabaseId,
           cursorSub: identity.cursorSub,
           name: identity.name || (identity.email ? identity.email.split("@")[0] : `Reader ${identity.phone?.slice(-4) ?? ""}`),

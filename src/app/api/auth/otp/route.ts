@@ -6,7 +6,7 @@ import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { getSupabase } from "@/lib/supabase/server";
 
 const schema = z.union([
-  z.object({ email: z.string().email() }),
+  z.object({ email: z.string().email().max(254) }),
   z.object({ phone: z.string().regex(/^\+[1-9]\d{7,14}$/, "Use international format, e.g. +919876543210") }),
 ]);
 
@@ -16,6 +16,11 @@ export async function POST(req: Request) {
   }
   const parsed = schema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
+
+  const target = "email" in parsed.data ? parsed.data.email.toLowerCase() : parsed.data.phone;
+  if (!rateLimit(`otp:${target}`, 3, 10 * 60_000)) {
+    return NextResponse.json({ error: "Too many codes requested for this address. Try again later." }, { status: 429 });
+  }
 
   const mode = authMode();
   if (mode === "demo") {
